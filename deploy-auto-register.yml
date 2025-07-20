@@ -1,0 +1,155 @@
+---
+- name: Deploy GitHub Runner Auto-Registration System
+  hosts: runner-hosts
+  become: yes
+  vars:
+    github_token: "{{ vault_github_token }}"
+    github_username: "{{ vault_github_username | default('***REMOVED***') }}"
+    runner_labels: "{{ vault_runner_labels | default('self-hosted,linux,x64,ansible') }}"
+    runner_name_prefix: "{{ vault_runner_name_prefix | default('auto-runner') }}"
+    runner_work_dir: "{{ vault_runner_work_dir | default('/opt/github-runners') }}"
+    runner_user: "{{ vault_runner_user | default('github-runner') }}"
+    scan_interval_minutes: "{{ vault_scan_interval_minutes | default(30) }}"
+    log_file: "/var/log/github-runner-auto-register.log"
+
+  tasks:
+    - name: Gather facts
+      setup:
+
+    - name: Display deployment information
+      debug:
+        msg:
+          - "=== GitHub Runner Auto-Registration Deployment ==="
+          - "Target Host: {{ inventory_hostname }}"
+          - "GitHub Username: {{ github_username }}"
+          - "Runner Labels: {{ runner_labels }}"
+          - "Runner Work Directory: {{ runner_work_dir }}"
+          - "Scan Interval: {{ scan_interval_minutes }} minutes"
+
+    - name: Install required packages
+      package:
+        name:
+          - jq
+          - curl
+          - git
+          - systemd
+        state: present
+
+    - name: Create runner user
+      user:
+        name: "{{ runner_user }}"
+        system: yes
+        shell: /bin/bash
+        home: "/home/{{ runner_user }}"
+        create_home: yes
+        state: present
+
+    - name: Create directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ runner_user }}"
+        group: "{{ runner_user }}"
+        mode: "0755"
+      loop:
+        - "/opt/scripts"
+        - "{{ runner_work_dir }}"
+        - "/home/{{ runner_user }}/.ssh"
+
+    - name: Copy auto-registration script
+      template:
+        src: auto-register-runners.sh.j2
+        dest: "/opt/scripts/auto-register-runners.sh"
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Copy systemd service file
+      template:
+        src: github-runner-auto-register.service.j2
+        dest: "/etc/systemd/system/github-runner-auto-register.service"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Copy systemd timer file
+      template:
+        src: github-runner-auto-register.timer.j2
+        dest: "/etc/systemd/system/github-runner-auto-register.timer"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Store GitHub token securely
+      copy:
+        content: "{{ github_token }}"
+        dest: "/etc/github-runner-token"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Create manual trigger script
+      template:
+        src: register-github-runners.j2
+        dest: "/usr/local/bin/register-github-runners"
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create log file
+      file:
+        path: "{{ log_file }}"
+        state: touch
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start timer
+      systemd:
+        name: github-runner-auto-register.timer
+        enabled: yes
+        state: started
+
+    - name: Run initial registration
+      command: /usr/local/bin/register-github-runners
+      register: initial_run
+      changed_when: initial_run.rc == 0
+      failed_when: initial_run.rc != 0
+
+    - name: Display registration results
+      debug:
+        msg:
+          - "=== Initial Registration Results ==="
+          - "Exit Code: {{ initial_run.rc }}"
+          - "Output: {{ initial_run.stdout }}"
+          - "Errors: {{ initial_run.stderr }}"
+
+    - name: Check timer status
+      command: systemctl list-timers github-runner-auto-register.timer --no-pager
+      register: timer_status
+      changed_when: false
+
+    - name: Display timer status
+      debug:
+        msg: "{{ timer_status.stdout_lines }}"
+
+    - name: Display final status
+      debug:
+        msg:
+          - "=== Deployment Complete ==="
+          - "✅ Auto-registration script: /opt/scripts/auto-register-runners.sh"
+          - "✅ Systemd service: github-runner-auto-register.service"
+          - "✅ Systemd timer: github-runner-auto-register.timer"
+          - "✅ Manual trigger: /usr/local/bin/register-github-runners"
+          - "✅ Log file: {{ log_file }}"
+          - "✅ GitHub token: /etc/github-runner-token"
+          - ""
+          - "=== Usage ==="
+          - "• Automatic: Runs every {{ scan_interval_minutes }} minutes"
+          - "• Manual: sudo /usr/local/bin/register-github-runners"
+          - "• Logs: sudo journalctl -u github-runner-auto-register.service"
+          - "• Status: sudo systemctl status github-runner-auto-register.timer"

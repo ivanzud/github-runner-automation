@@ -1,0 +1,22 @@
+#!/bin/bash
+# Manual trigger for GitHub runner registration
+
+if [ "$EUID" -ne 0 ]; then
+    echo "This script must be run as root"
+    exit 1
+fi
+
+# Read token from file
+if [ ! -f /etc/github-runner-token ]; then
+    echo "GitHub token not found. Please run the installation script first."
+    exit 1
+fi
+
+export GITHUB_TOKEN=$(cat /etc/github-runner-token)
+export GITHUB_USERNAME="{{ github_username }}"
+export RUNNER_LABELS="{{ runner_labels }}"
+export RUNNER_NAME_PREFIX="{{ runner_name_prefix }}"
+export RUNNER_WORK_DIR="{{ runner_work_dir }}"
+export RUNNER_USER="{{ runner_user }}"
+
+/opt/scripts/auto-register-runners.sh 
