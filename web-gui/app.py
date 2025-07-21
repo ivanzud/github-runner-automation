@@ -414,11 +414,42 @@ def config_page():
         # Update vault variables
         else:
             try:
+                interval_changed = False
                 for key in form_data:
+                    if key == 'scan_interval_minutes' and str(vault_vars.get(key)) != str(form_data[key]):
+                        interval_changed = True
                     vault_vars[key] = form_data[key]
                 with open(VAULT_FILE, 'w') as f:
                     yaml.safe_dump(vault_vars, f, default_flow_style=False, allow_unicode=True)
                 message = "Configuration updated successfully."
+                # If scan_interval_minutes changed, update timer on all servers
+                if interval_changed:
+                    try:
+                        interval = int(vault_vars['scan_interval_minutes'])
+                        # Update timer file on all servers using Ansible copy+replace
+                        timer_file = 'scripts/github-runner-auto-register.timer'
+                        # Update local timer file
+                        with open(timer_file, 'r') as f:
+                            lines = f.readlines()
+                        with open(timer_file, 'w') as f:
+                            for line in lines:
+                                if line.startswith('OnUnitActiveSec='):
+                                    f.write(f'OnUnitActiveSec={interval}min\n')
+                                else:
+                                    f.write(line)
+                        # Copy to all servers
+                        subprocess.run([
+                            'ansible', '-i', 'inventory/hosts', 'runner-hosts', '-m', 'copy',
+                            '-a', f"src={timer_file} dest=/etc/systemd/system/github-runner-auto-register.timer owner=root group=root mode=0644", '-b'
+                        ], check=True)
+                        # Reload and restart timer on all servers
+                        subprocess.run([
+                            'ansible', '-i', 'inventory/hosts', 'runner-hosts', '-m', 'shell',
+                            '-a', 'systemctl daemon-reload && systemctl restart github-runner-auto-register.timer', '-b'
+                        ], check=True)
+                        message += f" Timer interval updated to {interval} minutes on all servers."
+                    except Exception as e:
+                        message += f" (Failed to update timer on servers: {e})"
             except Exception as e:
                 message = f"Error updating vault: {e}"
     return render_template('config.html', vault_vars=vault_vars, message=message, servers=servers)
