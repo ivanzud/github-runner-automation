@@ -1,0 +1,4 @@
+---
+# Variables for runner hosts
+runner_user: github-runner
+runner_work_dir: /home/github-runner/actions-runner

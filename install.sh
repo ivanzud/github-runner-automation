@@ -58,7 +58,7 @@ check_vault() {
 test_connectivity() {
     log "Testing SSH connectivity to servers..."
     
-    if ! ansible runner-hosts -m ping; then
+    if ! ansible -i inventory/hosts runner-hosts -m ping; then
         error "SSH connectivity test failed."
         echo "Please check your SSH configuration and server connectivity."
         exit 1
@@ -89,14 +89,14 @@ show_status() {
     echo ""
     
     # Check automation status
-    ansible runner-hosts -m shell -a "systemctl status github-runner-auto-register.timer --no-pager" || true
+    ansible -i inventory/hosts runner-hosts -m shell -a "systemctl status github-runner-auto-register.timer --no-pager" || true
     
     echo ""
     echo "=== ACTIVE RUNNERS ==="
     echo ""
     
     # Check active runners
-    ansible runner-hosts -m shell -a "systemctl list-units --type=service | grep github-runner" || true
+    ansible -i inventory/hosts runner-hosts -m shell -a "systemctl list-units --type=service | grep github-runner" || true
     
     echo ""
     echo "=== NEXT STEPS ==="

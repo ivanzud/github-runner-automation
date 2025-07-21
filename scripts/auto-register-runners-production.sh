@@ -6,8 +6,9 @@
 set -e
 
 # Production Configuration (from vault file)
-GITHUB_TOKEN="***REMOVED***"
-GITHUB_USERNAME="***REMOVED***"
+GITHUB_TOKEN="{{ github_token }}"
+GITHUB_USERNAME="{{ github_username }}"
+{% raw %}
 RUNNER_LABELS="self-hosted,linux,x64,production"
 RUNNER_NAME_PREFIX="prod-runner"
 RUNNER_WORK_DIR="/opt/github-runners"
@@ -379,4 +380,5 @@ main() {
 }
 
 # Run main function
-main "$@" 
+main "$@"
+{% endraw %}

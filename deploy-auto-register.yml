@@ -4,7 +4,7 @@
   become: yes
   vars:
     github_token: "{{ vault_github_token }}"
-    github_username: "{{ vault_github_username | default('***REMOVED***') }}"
+    github_username: "{{ vault_github_username | default('ivanzud') }}"
     runner_labels: "{{ vault_runner_labels | default('self-hosted,linux,x64,ansible') }}"
     runner_name_prefix: "{{ vault_runner_name_prefix | default('auto-runner') }}"
     runner_work_dir: "{{ vault_runner_work_dir | default('/opt/github-runners') }}"

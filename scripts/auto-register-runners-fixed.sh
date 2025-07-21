@@ -7,7 +7,7 @@ set -e
 
 # Configuration
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
-GITHUB_USERNAME="${GITHUB_USERNAME:-***REMOVED***}"
+GITHUB_USERNAME="${GITHUB_USERNAME:-ivanzud}"
 RUNNER_LABELS="${RUNNER_LABELS:-self-hosted,linux,x64,ansible,test}"
 RUNNER_NAME_PREFIX="${RUNNER_NAME_PREFIX:-test-runner}"
 RUNNER_WORK_DIR="${RUNNER_WORK_DIR:-/opt/github-runners}"

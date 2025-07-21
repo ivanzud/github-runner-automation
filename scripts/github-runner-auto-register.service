@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=oneshot
 User=root
 Environment=GITHUB_TOKEN=%i
-Environment=GITHUB_USERNAME=***REMOVED***
+Environment=GITHUB_USERNAME=ivanzud
 Environment=RUNNER_LABELS=self-hosted,linux,x64,ansible
 Environment=RUNNER_NAME_PREFIX=auto-runner
 Environment=RUNNER_WORK_DIR=/opt/github-runners
