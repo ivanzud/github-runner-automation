@@ -3,4 +3,4 @@
 
 github_token: "ghp_exampletoken1234567890"
 github_username: "your-github-username"
-scan_interval_minutes: 5 
+scan_interval_minutes: 15 
