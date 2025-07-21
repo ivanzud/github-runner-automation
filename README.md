@@ -4,6 +4,12 @@
 
 ---
 
+## 🚧 Beta Software — Use With Caution
+
+This project is still in **beta**. It is not production-ready. Use at your own risk, and do not rely on it for critical infrastructure without thorough testing and review.
+
+---
+
 ## ⚠️ Before You Start: Protect Your Secrets
 
 - **Don't commit your real inventory or vault files to git.**
@@ -96,7 +102,7 @@ Open your browser to: **http://localhost:8080**
 - **Zero manual runner setup:** Just add a repo with `runs-on: self-hosted` and it gets a runner.
 - **Easy scaling:** Add/remove servers in your inventory, and the system handles the rest.
 - **Web dashboard:** See all your runners, servers, and logs in one place.
-- **Safe and production-ready:** Uses systemd, SSH keys, and secure token storage.
+- **Beta quality:** This is still experimental—expect bugs and rough edges.
 
 ---
 
@@ -178,4 +184,4 @@ github-runner-automation/
 
 ---
 
-**This project is for anyone who wants to automate and scale self-hosted GitHub Actions runners, without the manual pain. Enjoy!**
+**This project is for anyone who wants to automate and scale self-hosted GitHub Actions runners, but it's still in beta. Use with care!**
