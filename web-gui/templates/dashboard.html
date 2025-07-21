@@ -1,0 +1,360 @@
+{% extends "base.html" %} {% block title %}Dashboard - GitHub Runner Manager{%
+endblock %} {% block page_title %}Dashboard{% endblock %} {% block page_actions
+%}
+<button class="btn btn-primary btn-action" onclick="manualDashboardRefresh()">
+  <i class="fas fa-sync-alt me-1"></i> Refresh
+</button>
+{% endblock %} {% block content %}
+
+<!-- Loading Progress Bar (removed, replaced by inline spinners) -->
+
+<!-- Main Content -->
+<div id="main-content">
+  <!-- Overview Cards -->
+  <div class="row mb-4" id="overview-cards">
+    <div class="col-12 text-center py-4" id="overview-loading">
+      <div class="spinner-border text-primary mb-3" role="status">
+        <span class="visually-hidden">Loading overview...</span>
+      </div>
+      <h5 class="text-muted">Loading overview...</h5>
+    </div>
+  </div>
+
+  <!-- Server Status -->
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-server me-2"></i>
+            Server Status
+          </h5>
+        </div>
+        <div class="card-body" id="server-status-table">
+          <div class="text-center py-4" id="server-table-loading">
+            <div class="spinner-border text-primary mb-3" role="status">
+              <span class="visually-hidden">Loading servers...</span>
+            </div>
+            <h5 class="text-muted">Loading servers...</h5>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GitHub Runners Summary (Dynamic, unchanged) -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-running me-2"></i>
+            GitHub Runners (All Servers)
+          </h5>
+        </div>
+        <div class="card-body" id="runners-summary">
+          <div class="text-center py-4" id="runners-loading">
+            <div class="spinner-border text-primary mb-3" role="status">
+              <span class="visually-hidden">Loading runners...</span>
+            </div>
+            <h5 class="text-muted">Loading runners...</h5>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Configuration Summary -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-cog me-2"></i>
+            Configuration Summary
+          </h5>
+        </div>
+        <div class="card-body" id="config-summary">
+          <div class="text-center py-4" id="config-loading">
+            <div class="spinner-border text-primary mb-3" role="status">
+              <span class="visually-hidden">Loading config...</span>
+            </div>
+            <h5 class="text-muted">Loading config...</h5>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  // Dynamically load overview cards, server table, and config summary
+  function loadDashboardData() {
+    // Overview
+    const overviewDiv = document.getElementById("overview-cards");
+    const overviewLoading = document.getElementById("overview-loading");
+    // Server Table
+    const serverTableDiv = document.getElementById("server-status-table");
+    const serverTableLoading = document.getElementById("server-table-loading");
+    // Config
+    const configDiv = document.getElementById("config-summary");
+    const configLoading = document.getElementById("config-loading");
+
+    fetch("/api/server-status")
+      .then((resp) => resp.json())
+      .then((data) => {
+        // Overview Cards
+        if (overviewDiv) {
+          let totalServers = data.servers.length;
+          let onlineServers = data.servers.filter(
+            (s) => s.status === "online"
+          ).length;
+          let totalRunners = data.servers.reduce(
+            (sum, s) => sum + (s.runners || 0),
+            0
+          );
+          let scanInterval = data.config.scan_interval || 5;
+          overviewDiv.innerHTML = `
+        <div class="col-md-3">
+          <div class="card"><div class="card-body text-center">
+            <i class="fas fa-server fa-2x text-primary mb-2"></i>
+            <h5 class="card-title">${totalServers}</h5>
+            <p class="card-text text-muted">Total Servers</p>
+          </div></div></div>
+        <div class="col-md-3">
+          <div class="card"><div class="card-body text-center">
+            <i class="fas fa-play-circle fa-2x text-success mb-2"></i>
+            <h5 class="card-title">${onlineServers}</h5>
+            <p class="card-text text-muted">Online Servers</p>
+          </div></div></div>
+        <div class="col-md-3">
+          <div class="card"><div class="card-body text-center">
+            <i class="fas fa-running fa-2x text-info mb-2"></i>
+            <h5 class="card-title">${totalRunners}</h5>
+            <p class="card-text text-muted">Total Runners</p>
+          </div></div></div>
+        <div class="col-md-3">
+          <div class="card"><div class="card-body text-center">
+            <i class="fas fa-clock fa-2x text-warning mb-2"></i>
+            <h5 class="card-title">${scanInterval}m</h5>
+            <p class="card-text text-muted">Scan Interval</p>
+          </div></div></div>
+        `;
+        }
+        // Server Table
+        if (serverTableDiv) {
+          let html = `<div class='table-responsive'><table class='table table-hover' id='server-table'><thead><tr><th>Server Name</th><th>Host</th><th>Status</th><th>Automation</th><th>Runners</th><th>Last Activity</th><th>Actions</th></tr></thead><tbody>`;
+          data.servers.forEach((server) => {
+            const statusBadge =
+              server.status === "online"
+                ? '<span class="badge bg-success"><i class="fas fa-circle me-1"></i>Online</span>'
+                : '<span class="badge bg-danger"><i class="fas fa-circle me-1"></i>Offline</span>';
+            const automationBadge =
+              server.automation === "active"
+                ? '<span class="badge bg-success">Active</span>'
+                : '<span class="badge bg-warning">Inactive</span>';
+            html += `<tr>
+            <td><strong>${server.name}</strong></td>
+            <td><code>${server.host}</code></td>
+            <td>${statusBadge}</td>
+            <td>${automationBadge}</td>
+            <td><span class="badge bg-info">${server.runners || 0}</span></td>
+            <td><small class="text-muted">${
+              server.last_activity || "No activity"
+            }</small></td>
+            <td>
+              <div class="btn-group btn-group-sm" role="group">
+                <a href="/server/${
+                  server.host
+                }" class="btn btn-outline-primary" title="View Details">
+                  <i class="fas fa-eye"></i>
+                </a>
+                <button class="btn btn-outline-success" onclick="triggerScan('${
+                  server.host
+                }')" title="Trigger Scan">
+                  <i class="fas fa-sync-alt"></i>
+                </button>
+                <button class="btn btn-outline-warning" onclick="restartAutomation('${
+                  server.host
+                }')" title="Restart Automation">
+                  <i class="fas fa-redo"></i>
+                </button>
+              </div>
+            </td>
+          </tr>`;
+          });
+          html += `</tbody></table></div>`;
+          serverTableDiv.innerHTML = html;
+        }
+        // Config Summary
+        if (configDiv) {
+          let config = data.config;
+          configDiv.innerHTML = `
+        <div class="row">
+          <div class="col-md-6">
+            <p><strong>GitHub Username:</strong> ${
+              config.github_username || "Not configured"
+            }</p>
+            <p><strong>Scan Interval:</strong> ${
+              config.scan_interval || 5
+            } minutes</p>
+          </div>
+          <div class="col-md-6">
+            <p><strong>Token Status:</strong> ${
+              config.github_token
+                ? "<span class='badge bg-success'>Configured</span>"
+                : "<span class='badge bg-warning'>Not configured</span>"
+            }</p>
+            <p><strong>Last Updated:</strong> Now</p>
+          </div>
+        </div>
+        `;
+        }
+      })
+      .catch(() => {
+        if (overviewDiv)
+          overviewDiv.innerHTML = `<div class='text-center py-4'><i class='fas fa-exclamation-triangle fa-3x text-danger mb-3'></i><h5 class='text-danger'>Failed to load overview</h5></div>`;
+        if (serverTableDiv)
+          serverTableDiv.innerHTML = `<div class='text-center py-4'><i class='fas fa-exclamation-triangle fa-3x text-danger mb-3'></i><h5 class='text-danger'>Failed to load servers</h5></div>`;
+        if (configDiv)
+          configDiv.innerHTML = `<div class='text-center py-4'><i class='fas fa-exclamation-triangle fa-3x text-danger mb-3'></i><h5 class='text-danger'>Failed to load config</h5></div>`;
+      });
+  }
+
+  // Existing triggerScan and restartAutomation functions (for buttons)
+  function triggerScan(host) {
+    if (confirm("Trigger manual scan on " + host + "?")) {
+      fetch("/api/trigger_scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ host: host }),
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success) {
+            alert("Scan triggered successfully!");
+            loadDashboardData();
+          } else {
+            alert("Error: " + data.stderr);
+          }
+        })
+        .catch((error) => {
+          alert("Error: " + error);
+        });
+    }
+  }
+  function restartAutomation(host) {
+    if (confirm("Restart automation on " + host + "?")) {
+      fetch("/api/restart_automation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ host: host }),
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success) {
+            alert("Automation restarted successfully!");
+            loadDashboardData();
+          } else {
+            alert("Error: " + data.stderr);
+          }
+        })
+        .catch((error) => {
+          alert("Error: " + error);
+        });
+    }
+  }
+  function manualDashboardRefresh() {
+    loadDashboardData();
+    loadRunnersSummary();
+  }
+  // Initial load
+  loadDashboardData();
+  // Auto-refresh every 15 minutes (900,000 ms)
+  setInterval(loadDashboardData, 900000);
+</script>
+<script>
+  function loadRunnersSummary() {
+    const summaryDiv = document.getElementById("runners-summary");
+    const loadingDiv = document.getElementById("runners-loading");
+    loadingDiv.style.display = "";
+    summaryDiv.innerHTML = loadingDiv.outerHTML;
+
+    // Fetch servers list dynamically from /api/server-status
+    fetch("/api/server-status")
+      .then((resp) => resp.json())
+      .then((data) => {
+        const serversList = data.servers || [];
+        let runnersByServer = {};
+        let totalRunners = 0;
+        let completed = 0;
+        if (!serversList.length) {
+          summaryDiv.innerHTML = `<div class='text-center py-4'><i class='fas fa-running fa-3x text-muted mb-3'></i><h5 class='text-muted'>No servers configured</h5></div>`;
+          return;
+        }
+        serversList.forEach((server) => {
+          fetch(`/api/server-detail/${server.host}`)
+            .then((resp) => resp.json())
+            .then((data) => {
+              completed++;
+              if (data.success && data.runners && data.runners.length) {
+                runnersByServer[server.host] = {
+                  name: server.name,
+                  host: server.host,
+                  runners: data.runners,
+                };
+                totalRunners += data.runners.length;
+              }
+              if (completed === serversList.length) renderRunnersSummary();
+            })
+            .catch(() => {
+              completed++;
+              if (completed === serversList.length) renderRunnersSummary();
+            });
+        });
+        function renderRunnersSummary() {
+          if (totalRunners === 0) {
+            summaryDiv.innerHTML = `<div class='text-center py-4'><i class='fas fa-running fa-3x text-muted mb-3'></i><h5 class='text-muted'>No runners found on any server</h5></div>`;
+            return;
+          }
+          let html = "";
+          Object.values(runnersByServer).forEach((server) => {
+            html += `<h6 class='mt-3 mb-2'><i class='fas fa-server me-1'></i> ${server.name} (${server.host})</h6>`;
+            html += `<div class='table-responsive mb-4'><table class='table table-sm table-hover'><thead><tr><th>Runner Code</th><th>Repository</th><th>Systemd Unit Name</th><th>Status</th><th>Description</th></tr></thead><tbody>`;
+            server.runners.forEach((runner) => {
+              html += `<tr>`;
+              html += `<td><code>${
+                runner.service && runner.service.includes("@")
+                  ? runner.service.split("@")[1].split(".")[0]
+                  : runner.service
+              }</code></td>`;
+              html += `<td><code>${runner.repo || ""}</code></td>`;
+              html += `<td><code>${
+                runner.escaped_repo || ""
+              }.service</code></td>`;
+              html += `<td>`;
+              if (runner.status === "active")
+                html += `<span class='badge bg-success'>Active</span>`;
+              else if (runner.status === "inactive")
+                html += `<span class='badge bg-warning'>Inactive</span>`;
+              else
+                html += `<span class='badge bg-secondary'>${
+                  runner.status || ""
+                }</span>`;
+              html += `</td>`;
+              html += `<td>${runner.description || ""}</td>`;
+              html += `</tr>`;
+            });
+            html += `</tbody></table></div>`;
+          });
+          summaryDiv.innerHTML = html;
+        }
+      });
+  }
+  document.addEventListener("DOMContentLoaded", loadRunnersSummary);
+  // Initial load
+  loadRunnersSummary();
+  // Auto-refresh runners every 15 minutes
+  setInterval(loadRunnersSummary, 900000);
+</script>
+{% endblock %}

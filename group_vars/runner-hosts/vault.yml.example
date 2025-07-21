@@ -1,0 +1,6 @@
+# Example vault.yml for GitHub Runner Automation
+# Copy this file to 'group_vars/runner-hosts/vault.yml' and edit with your real secrets
+
+github_token: "ghp_exampletoken1234567890"
+github_username: "your-github-username"
+scan_interval_minutes: 5 

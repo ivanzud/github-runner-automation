@@ -1,0 +1,368 @@
+{% extends "base.html" %} {% block title %}{{ server.name }} - GitHub Runner
+Manager{% endblock %} {% block page_title %}{{ server.name }} Details{% endblock
+%} {% block page_actions %}
+<a
+  href="{{ url_for('dashboard') }}"
+  class="btn btn-outline-secondary btn-action"
+>
+  <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
+</a>
+<button class="btn btn-primary btn-action" onclick="refreshPage()">
+  <i class="fas fa-sync-alt me-1"></i> Refresh
+</button>
+{% endblock %} {% block content %}
+<!-- Server Info -->
+<div class="row mb-4">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-server me-2"></i>
+          Server Information
+        </h5>
+      </div>
+      <div class="card-body">
+        <p><strong>Name:</strong> {{ server.name }}</p>
+        <p><strong>Host:</strong> <code>{{ server.host }}</code></p>
+        <p>
+          <strong>Status:</strong>
+          {% if server.status == 'online' %}
+          <span class="badge bg-success">
+            <i class="fas fa-circle me-1"></i>Online
+          </span>
+          {% elif server.status == 'offline' %}
+          <span class="badge bg-danger">
+            <i class="fas fa-circle me-1"></i>Offline
+          </span>
+          {% else %}
+          <span class="badge bg-secondary">
+            <i class="fas fa-circle me-1"></i>Unknown
+          </span>
+          {% endif %}
+        </p>
+        <p>
+          <strong>Automation Status:</strong>
+          {% if server.timer_status == 'active' %}
+          <span class="badge bg-success">Active</span>
+          {% else %}
+          <span class="badge bg-warning">Inactive</span>
+          {% endif %}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-tools me-2"></i>
+          Quick Actions
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="d-grid gap-2">
+          <button
+            class="btn btn-success"
+            onclick="triggerScan('{{ server.host }}')"
+          >
+            <i class="fas fa-sync-alt me-2"></i>Trigger Manual Scan
+          </button>
+          <button
+            class="btn btn-warning"
+            onclick="restartAutomation('{{ server.host }}')"
+          >
+            <i class="fas fa-redo me-2"></i>Restart Automation
+          </button>
+          <button class="btn btn-info" onclick="viewLogs('{{ server.host }}')">
+            <i class="fas fa-file-alt me-2"></i>View Recent Logs
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Runners -->
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div
+        class="card-header d-flex justify-content-between align-items-center"
+      >
+        <h5 class="card-title mb-0">
+          <i class="fas fa-running me-2"></i>
+          GitHub Runners ({{ runners|length }})
+        </h5>
+      </div>
+      <div class="card-body">
+        {% if runners %}
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Runner Code</th>
+                <th>Service Name</th>
+                <th>Repository</th>
+                <th>Systemd Unit Name</th>
+                <th>Status</th>
+                <th>Description</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for runner in runners %}
+              <tr>
+                <td>
+                  <code>
+                    {{ runner.service.split('@')[1].split('.')[0] if '@' in
+                    runner.service else runner.service }}
+                  </code>
+                </td>
+                <td><code>{{ runner.service }}</code></td>
+                <td><code>{{ runner.repo }}</code></td>
+                <td><code>{{ runner.escaped_repo }}.service</code></td>
+                <td>
+                  {% if runner.status == 'active' %}
+                  <span class="badge bg-success">Active</span>
+                  {% elif runner.status == 'inactive' %}
+                  <span class="badge bg-warning">Inactive</span>
+                  {% else %}
+                  <span class="badge bg-secondary">{{ runner.status }}</span>
+                  {% endif %}
+                </td>
+                <td>{{ runner.description }}</td>
+                <td>
+                  <div class="btn-group btn-group-sm" role="group">
+                    {% if runner.status == 'active' %}
+                    <button
+                      class="btn btn-outline-warning"
+                      onclick="stopRunner('{{ server.host }}', '{{ runner.service }}')"
+                      title="Stop Runner"
+                    >
+                      <i class="fas fa-stop"></i>
+                    </button>
+                    {% else %}
+                    <button
+                      class="btn btn-outline-success"
+                      onclick="startRunner('{{ server.host }}', '{{ runner.service }}')"
+                      title="Start Runner"
+                    >
+                      <i class="fas fa-play"></i>
+                    </button>
+                    {% endif %}
+                    <button
+                      class="btn btn-outline-info"
+                      onclick="restartRunner('{{ server.host }}', '{{ runner.service }}')"
+                      title="Restart Runner"
+                    >
+                      <i class="fas fa-redo"></i>
+                    </button>
+                    <button
+                      class="btn btn-outline-secondary"
+                      onclick="viewRunnerLogs('{{ server.host }}', '{{ runner.service }}')"
+                      title="View Logs"
+                    >
+                      <i class="fas fa-file-alt"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+          <i class="fas fa-running fa-3x text-muted mb-3"></i>
+          <h5 class="text-muted">No runners found</h5>
+          <p class="text-muted">
+            No GitHub runners are currently registered on this server.
+          </p>
+          <button
+            class="btn btn-primary"
+            onclick="triggerScan('{{ server.host }}')"
+          >
+            <i class="fas fa-sync-alt me-2"></i>Trigger Scan to Register Runners
+          </button>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-history me-2"></i>
+          Recent Activity
+        </h5>
+      </div>
+      <div class="card-body">
+        {% if server.last_log %}
+        <div class="alert alert-info">
+          <strong>Last Log Entry:</strong><br />
+          <code>{{ server.last_log }}</code>
+        </div>
+        {% else %}
+        <div class="text-center py-3">
+          <i class="fas fa-info-circle fa-2x text-muted mb-2"></i>
+          <p class="text-muted">No recent activity logged</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  function refreshPage() {
+    location.reload();
+  }
+
+  function triggerScan(host) {
+    if (confirm("Trigger manual scan on " + host + "?")) {
+      $.ajax({
+        url: "/api/trigger_scan",
+        method: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({ host: host }),
+        success: function (response) {
+          if (response.success) {
+            alert("Scan triggered successfully!");
+            setTimeout(refreshPage, 2000);
+          } else {
+            alert("Error: " + response.message);
+          }
+        },
+        error: function () {
+          alert("Failed to trigger scan");
+        },
+      });
+    }
+  }
+
+  function restartAutomation(host) {
+    if (confirm("Restart automation on " + host + "?")) {
+      $.ajax({
+        url: "/api/restart_automation",
+        method: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({ host: host }),
+        success: function (response) {
+          if (response.success) {
+            alert("Automation restarted successfully!");
+            setTimeout(refreshPage, 2000);
+          } else {
+            alert("Error: " + response.message);
+          }
+        },
+        error: function () {
+          alert("Failed to restart automation");
+        },
+      });
+    }
+  }
+
+  function startRunner(host, serviceName) {
+    if (confirm("Start runner " + serviceName + "?")) {
+      $.ajax({
+        url: "/api/start_runner",
+        method: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({ host: host, service_name: serviceName }),
+        success: function (response) {
+          if (response.success) {
+            alert("Runner started successfully!");
+            setTimeout(refreshPage, 2000);
+          } else {
+            alert("Error: " + response.message);
+          }
+        },
+        error: function () {
+          alert("Failed to start runner");
+        },
+      });
+    }
+  }
+
+  function stopRunner(host, serviceName) {
+    if (confirm("Stop runner " + serviceName + "?")) {
+      $.ajax({
+        url: "/api/stop_runner",
+        method: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({ host: host, service_name: serviceName }),
+        success: function (response) {
+          if (response.success) {
+            alert("Runner stopped successfully!");
+            setTimeout(refreshPage, 2000);
+          } else {
+            alert("Error: " + response.message);
+          }
+        },
+        error: function () {
+          alert("Failed to stop runner");
+        },
+      });
+    }
+  }
+
+  function restartRunner(host, serviceName) {
+    if (confirm("Restart runner " + serviceName + "?")) {
+      // Stop first, then start
+      $.ajax({
+        url: "/api/stop_runner",
+        method: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({ host: host, service_name: serviceName }),
+        success: function (response) {
+          if (response.success) {
+            // Wait a moment, then start
+            setTimeout(function () {
+              $.ajax({
+                url: "/api/start_runner",
+                method: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({ host: host, service_name: serviceName }),
+                success: function (response2) {
+                  if (response2.success) {
+                    alert("Runner restarted successfully!");
+                    setTimeout(refreshPage, 2000);
+                  } else {
+                    alert("Error starting runner: " + response2.message);
+                  }
+                },
+                error: function () {
+                  alert("Failed to start runner");
+                },
+              });
+            }, 2000);
+          } else {
+            alert("Error stopping runner: " + response.message);
+          }
+        },
+        error: function () {
+          alert("Failed to stop runner");
+        },
+      });
+    }
+  }
+
+  function viewLogs(host) {
+    window.open("/logs", "_blank");
+  }
+
+  function viewRunnerLogs(host, serviceName) {
+    // This would open a modal or new page with runner-specific logs
+    alert("Runner logs feature coming soon!");
+  }
+
+  // Auto-refresh every 30 seconds
+  setInterval(refreshPage, 30000);
+</script>
+{% endblock %}

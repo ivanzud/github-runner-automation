@@ -1,0 +1,133 @@
+{% extends "base.html" %} {% block content %}
+<div class="container py-4">
+  <div class="row mb-4">
+    <div class="col-lg-6 mx-auto">
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+          <i class="fas fa-cog me-2"></i>Configuration Variables
+        </div>
+        <div class="card-body">
+          <form method="post">
+            {% for key, value in vault_vars.items() %}
+            <div class="mb-3">
+              <label for="{{ key }}" class="form-label">{{ key }}</label>
+              <input
+                type="text"
+                class="form-control"
+                id="{{ key }}"
+                name="{{ key }}"
+                value="{{ value }}"
+              />
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-primary w-100 mt-2">
+              Update Variables
+            </button>
+          </form>
+        </div>
+      </div>
+      {% if message %}
+      <div class="alert alert-info alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="alert"
+        ></button>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-lg-8 mx-auto">
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-secondary text-white">
+          <i class="fas fa-server me-2"></i>Manage Servers
+        </div>
+        <div class="card-body">
+          <h5 class="mb-3">Current Servers</h5>
+          <ul class="list-group mb-4">
+            {% for server in servers %}
+            <li
+              class="list-group-item d-flex justify-content-between align-items-center"
+            >
+              <div>
+                <i class="fas fa-desktop me-2 text-primary"></i>
+                <strong>{{ server.name }}</strong>
+                <span class="text-muted">({{ server.host }})</span>
+              </div>
+              <form
+                method="post"
+                class="mb-0"
+                style="display: inline"
+                onsubmit="return confirm('Remove server {{ server.name }} and delete all its runners?');"
+              >
+                <input
+                  type="hidden"
+                  name="remove_server"
+                  value="{{ server.name }}"
+                />
+                <button type="submit" class="btn btn-danger btn-sm">
+                  <i class="fas fa-trash-alt"></i> Remove
+                </button>
+              </form>
+            </li>
+            {% else %}
+            <li class="list-group-item text-muted">No servers configured.</li>
+            {% endfor %}
+          </ul>
+          <h5 class="mb-3">Add New Server</h5>
+          <form method="post" class="row g-3 align-items-end">
+            <div class="col-md-4">
+              <label for="new_server_name" class="form-label"
+                >Server Name</label
+              >
+              <input
+                type="text"
+                class="form-control"
+                id="new_server_name"
+                name="new_server_name"
+                required
+              />
+            </div>
+            <div class="col-md-4">
+              <label for="new_server_host" class="form-label"
+                >Host (IP or DNS)</label
+              >
+              <input
+                type="text"
+                class="form-control"
+                id="new_server_host"
+                name="new_server_host"
+                required
+              />
+            </div>
+            <div class="col-md-3">
+              <label for="new_server_user" class="form-label">User</label>
+              <input
+                type="text"
+                class="form-control"
+                id="new_server_user"
+                name="new_server_user"
+                value="root"
+                required
+              />
+            </div>
+            <div class="col-md-1 d-grid">
+              <button
+                type="submit"
+                name="add_server"
+                value="1"
+                class="btn btn-success"
+              >
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

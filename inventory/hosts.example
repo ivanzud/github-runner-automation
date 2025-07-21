@@ -1,0 +1,8 @@
+# Example Ansible inventory for GitHub Runner Automation
+# Copy this file to 'inventory/hosts' and edit with your server details
+
+[runner-hosts]
+runner-01 ansible_host=YOUR_SERVER_IP ansible_user=root
+
+[runner-hosts:vars]
+ansible_python_interpreter=/usr/bin/python3 

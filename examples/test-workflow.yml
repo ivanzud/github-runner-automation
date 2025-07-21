@@ -1,0 +1,55 @@
+# Example GitHub workflow to test self-hosted runner automation
+# Add this file to your repository at: .github/workflows/test-runner.yml
+
+name: Test Self-Hosted Runner
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  test-runner:
+    runs-on: self-hosted # This will trigger automatic runner registration
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Show system info
+        run: |
+          echo "=== System Information ==="
+          echo "OS: $(uname -s)"
+          echo "Architecture: $(uname -m)"
+          echo "Hostname: $(hostname)"
+          echo "User: $(whoami)"
+          echo "Working directory: $(pwd)"
+          echo "Available disk space:"
+          df -h
+
+      - name: Show runner labels
+        run: |
+          echo "=== Runner Labels ==="
+          echo "Runner labels: ${{ runner.labels }}"
+
+      - name: Test basic commands
+        run: |
+          echo "=== Testing Basic Commands ==="
+          echo "Python version: $(python3 --version)"
+          echo "Git version: $(git --version)"
+          echo "Current date: $(date)"
+
+      - name: Test file operations
+        run: |
+          echo "=== Testing File Operations ==="
+          echo "Hello from self-hosted runner!" > test-file.txt
+          cat test-file.txt
+          ls -la
+
+      - name: Success message
+        run: |
+          echo "🎉 Self-hosted runner is working correctly!"
+          echo "✅ Your GitHub Runner Automation is functioning properly"
+          echo "✅ This runner was automatically registered by the automation system"

@@ -1,20 +1,14 @@
 [Unit]
 Description=GitHub Runner Auto-Registration Service
 After=network.target
-Wants=network-online.target
 
 [Service]
 Type=oneshot
+ExecStart=/usr/local/bin/register-github-runners
 User=root
-Environment=GITHUB_TOKEN={{ github_token }}
-Environment=GITHUB_USERNAME={{ github_username }}
-Environment=RUNNER_LABELS={{ runner_labels }}
-Environment=RUNNER_NAME_PREFIX={{ runner_name_prefix }}
-Environment=RUNNER_WORK_DIR={{ runner_work_dir }}
-Environment=RUNNER_USER={{ runner_user }}
-ExecStart=/opt/scripts/auto-register-runners.sh
 StandardOutput=journal
 StandardError=journal
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [Install]
 WantedBy=multi-user.target 

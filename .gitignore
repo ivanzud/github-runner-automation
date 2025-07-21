@@ -1,0 +1,13 @@
+# Sensitive and environment-specific files
+inventory/hosts
+group_vars/runner-hosts/vault.yml
+# Python/venv
+venv/
+web-gui/venv/
+# Bytecode
+__pycache__/
+*.pyc
+# OS files
+.DS_Store
+# Logs
+*.log 

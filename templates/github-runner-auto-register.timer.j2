@@ -1,11 +1,11 @@
 [Unit]
 Description=Run GitHub Runner Auto-Registration every {{ scan_interval_minutes }} minutes
-Requires=github-runner-auto-register.service
+Requires={{ systemd_service_name }}.service
 
 [Timer]
-OnBootSec=5min
+OnBootSec=1min
 OnUnitActiveSec={{ scan_interval_minutes }}min
-Unit=github-runner-auto-register.service
+Unit={{ systemd_service_name }}.service
 
 [Install]
 WantedBy=timers.target 
