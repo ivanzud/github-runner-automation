@@ -3,7 +3,7 @@ Description=GitHub Runner Auto-Register Timer
 
 [Timer]
 OnBootSec=1min
-OnUnitActiveSec=15min
+OnUnitActiveSec={{ scan_interval_minutes }}min
 
 [Install]
 WantedBy=timers.target 
