@@ -1,118 +1,118 @@
 # GitHub Runner Automation
 
-**Automate your self-hosted GitHub Actions runners—one for every repo, no manual setup needed.**
+**Self-hosted GitHub Actions runners, provisioned automatically for every repository that needs them.**
 
 ---
 
-## 🚧 Beta Software — Use With Caution
-
-This project is still in **beta**. It is not production-ready. Use at your own risk, and do not rely on it for critical infrastructure without thorough testing and review.
-
----
-
-## ⚠️ Before You Start: Protect Your Secrets
-
-- **Don't commit your real inventory or vault files to git.**
-- This repo includes:
-  - `inventory/hosts.example` — Example inventory file
-  - `group_vars/runner-hosts/vault.yml.example` — Example vault file
-- **To get started:**
-  1. Copy these example files to their real locations:
-     - `cp inventory/hosts.example inventory/hosts`
-     - `cp group_vars/runner-hosts/vault.yml.example group_vars/runner-hosts/vault.yml`
-  2. Edit them with your real server info and secrets.
-- Your real files are ignored by git and will never be uploaded.
+> **Warning**
+>
+> This project is **beta software**. It is not production-ready. Use at your own risk and do not rely on it for critical infrastructure without thorough testing and review.
 
 ---
 
-## What Does This Project Do?
+## About
 
-**This automation will automatically provision a self-hosted GitHub Actions runner for every repository in your organization or user account that uses `runs-on: self-hosted` in its workflow.**
+**GitHub Runner Automation** is a toolkit for teams and organizations who want to automate the management of self-hosted GitHub Actions runners across many repositories and servers. If you use `runs-on: self-hosted` in your workflows, this project will:
 
-- No more manual runner setup for each repo.
-- Add a new repo or workflow? The system detects it and spins up a runner for you.
-- Remove a repo? The runner is cleaned up automatically.
-- All runners are managed via Ansible and a simple web interface.
+- Detect which repositories need self-hosted runners
+- Automatically provision and register a runner for each repo
+- Manage runners across multiple servers using Ansible
+- Provide a web dashboard for monitoring and control
 
-This is perfect for teams or individuals who want to scale self-hosted runners across many repos, without the headache of manual management.
+> **Note:**
+> This project is for **self-hosted runners** only. It does not manage GitHub-hosted (cloud) runners.
+
+---
+
+## Features
+
+| Feature                | Description                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| Automatic Provisioning | Detects repos with `runs-on: self-hosted` and registers runners automatically |
+| Multi-Server Support   | Manage runners across any number of servers via Ansible                       |
+| Web Dashboard          | Monitor servers, runners, and logs in your browser                            |
+| Easy Scaling           | Add/remove servers in your inventory, automation handles the rest             |
+| Secure by Default      | Uses SSH keys, stores secrets in vault files                                  |
+| Manual Control         | Start/stop/restart runners from the web UI                                    |
+
+---
+
+## How It Works
+
+1. **Scan**: The system scans your GitHub organization/user for repositories with workflows that use `runs-on: self-hosted`.
+2. **Provision**: For each repo, it provisions a runner on one of your servers (using Ansible and systemd).
+3. **Monitor**: The web dashboard shows the status of all servers and runners.
+4. **Manage**: You can add/remove servers, update configuration, and control runners from the web UI.
+
+> **Important:**
+> This automation will **add** runners for new repos that need them. However, if you delete a repo or remove its workflow, you may need to manually clean up the corresponding runner. Automatic cleanup of orphaned runners is not guaranteed in this beta version.
 
 ---
 
 ## Quick Start
 
-### 1. Prerequisites
+### Prerequisites
 
 - Ansible installed on your management machine
 - Python 3 (for the web UI)
 - SSH access to your runner servers (root or sudo)
 - GitHub Personal Access Token with `repo` and `admin:org` permissions
 
-### 2. Clone the Repository
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/your-username/github-runner-automation.git
 cd github-runner-automation
 ```
 
-### 3. Configure Your Servers and GitHub Token
+### 2. Configure Your Servers and GitHub Token
 
-Edit `inventory/hosts` and add your servers:
+- Copy the example files:
+  ```bash
+  cp inventory/hosts.example inventory/hosts
+  cp group_vars/runner-hosts/vault.yml.example group_vars/runner-hosts/vault.yml
+  ```
+- Edit `inventory/hosts` and add your servers:
 
-```ini
-[runner-hosts]
-runner-01 ansible_host=YOUR_SERVER_IP ansible_user=root
+  ```ini
+  [runner-hosts]
+  runner-01 ansible_host=YOUR_SERVER_IP ansible_user=root
 
-[runner-hosts:vars]
-ansible_python_interpreter=/usr/bin/python3
-```
+  [runner-hosts:vars]
+  ansible_python_interpreter=/usr/bin/python3
+  ```
 
-Edit `group_vars/runner-hosts/vault.yml`:
+- Edit `group_vars/runner-hosts/vault.yml`:
+  ```yaml
+  github_token: "ghp_your_github_token_here"
+  github_username: "your-github-username"
+  scan_interval_minutes: 5
+  ```
 
-```yaml
-github_token: "ghp_your_github_token_here"
-github_username: "your-github-username"
-scan_interval_minutes: 5
-```
-
-### 4. Deploy Everything
+### 3. Deploy Everything
 
 ```bash
 ./install.sh
 ```
 
-This will:
-
-- Install all dependencies
-- Set up systemd services and timers
-- Register runners on all servers
-
-### 5. Start the Web Management Interface
+### 4. Start the Web Management Interface
 
 ```bash
 cd web-gui
 ./start.sh
 ```
 
-Open your browser to: **http://localhost:8080**
+Open your browser to: [http://localhost:8080](http://localhost:8080)
 
 ---
 
-## Why Use This?
+## Web Interface
 
-- **Zero manual runner setup:** Just add a repo with `runs-on: self-hosted` and it gets a runner.
-- **Easy scaling:** Add/remove servers in your inventory, and the system handles the rest.
-- **Web dashboard:** See all your runners, servers, and logs in one place.
-- **Beta quality:** This is still experimental—expect bugs and rough edges.
-
----
-
-## Web Interface Features
-
-- **Dashboard:** See all servers, runners, and their status
-- **Server Management:** Add/remove servers, view details
-- **Runner Control:** Start/stop/restart runners
-- **Configuration:** Edit GitHub token and settings
-- **Logs:** View recent automation activity
+- **Dashboard**: See all servers, runners, and their status
+- **Server Management**: Add/remove servers, view details
+- **Runner Control**: Start/stop/restart runners
+- **Configuration**: Edit GitHub token and settings
+- **Logs**: View recent automation activity
 
 ---
 
@@ -184,4 +184,4 @@ github-runner-automation/
 
 ---
 
-**This project is for anyone who wants to automate and scale self-hosted GitHub Actions runners, but it's still in beta. Use with care!**
+**GitHub Runner Automation is for anyone who wants to automate and scale self-hosted GitHub Actions runners. Still in beta—test, contribute, and help make it better!**
