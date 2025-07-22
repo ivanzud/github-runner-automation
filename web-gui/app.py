@@ -33,6 +33,8 @@ class RunnerManager:
     def __init__(self):
         self.servers = self.load_servers()
         self.config = self.load_config()
+        # Create a mapping from IP to server name for Ansible commands
+        self.ip_to_name = {server['host']: server['name'] for server in self.servers}
     
     def load_servers(self):
         """Load servers from Ansible inventory"""
@@ -54,6 +56,9 @@ class RunnerManager:
                             })
         except Exception as e:
             logging.error(f"Error loading servers: {e}")
+        
+        # Update the IP-to-name mapping
+        self.ip_to_name = {server['host']: server['name'] for server in servers}
         return servers
     
     def load_config(self):
@@ -73,12 +78,22 @@ class RunnerManager:
             logging.error(f"Error loading config: {e}")
         return config
     
-    def run_ansible_command(self, command, timeout=10, become=False, become_user=None):
+    def run_ansible_command(self, command, timeout=10, become=False, become_user=None, host=None):
         """Run an Ansible command and return the result"""
         try:
-            ansible_cmd = f"ansible -i {INVENTORY_FILE} runner-hosts -m shell -a '{command}'"
+            # If host is specified, convert IP to server name for Ansible, otherwise target all runner-hosts
+            if host and host in self.ip_to_name:
+                target = self.ip_to_name[host]
+            elif host:
+                target = host  # Use as-is if not found in mapping
+            else:
+                target = "runner-hosts"
+            
+            ansible_cmd = f"ansible -i {INVENTORY_FILE} {target} -m shell -a '{command}'"
             if become:
-                ansible_cmd += f" -b -u {become_user}"
+                ansible_cmd += f" -b"
+                if become_user:
+                    ansible_cmd += f" -u {become_user}"
             result = subprocess.run(
                 ansible_cmd,
                 shell=True, capture_output=True, text=True, timeout=timeout
@@ -129,13 +144,13 @@ class RunnerManager:
                 return cached_data
         
         try:
-            # Quick status check with shorter timeout
-            stdout, stderr, code = self.run_ansible_command('systemctl is-active github-runner-auto-register.timer', timeout=5)
+            # Quick status check with shorter timeout - target specific host
+            stdout, stderr, code = self.run_ansible_command('systemctl is-active github-runner-auto-register.timer', timeout=5, host=host)
             timer_status = self.clean_ansible_output(stdout).strip() if code == 0 else 'inactive'
             
-            # Get all runner services and count in Python, using become for the github-runner user
+            # Get all runner services and count in Python, using become for the github-runner user - target specific host
             ansible_cmd = 'systemctl list-units --type=service | grep github-runner | grep "active running"'
-            stdout, stderr, code = self.run_ansible_command(ansible_cmd, timeout=5, become=True, become_user='github-runner')
+            stdout, stderr, code = self.run_ansible_command(ansible_cmd, timeout=5, become=True, become_user='github-runner', host=host)
             logging.debug(f"Raw runner service output for {host}:\n{stdout}")
             logging.debug(f"repr(stdout): {repr(stdout)}")
             logging.debug(f"stderr: {stderr}")
@@ -145,8 +160,8 @@ class RunnerManager:
             runner_count = len(runner_lines)
             logging.debug(f"Runner count for {host}: {runner_count}")
             
-            # Quick log check
-            stdout, stderr, code = self.run_ansible_command('tail -1 /var/log/github-runner-auto-register.log 2>/dev/null || echo "No log available"', timeout=5)
+            # Quick log check - target specific host
+            stdout, stderr, code = self.run_ansible_command('tail -1 /var/log/github-runner-auto-register.log 2>/dev/null || echo "No log available"', timeout=5, host=host)
             last_log = self.clean_ansible_output(stdout).strip() if code == 0 and self.clean_ansible_output(stdout).strip() else 'No log available'
             
             # Determine overall status
@@ -178,13 +193,13 @@ class RunnerManager:
     def get_runners(self, host):
         """Get all runner services and their repo mapping for a server"""
         ansible_cmd = 'systemctl list-units --type=service | grep github-runner@ | awk "{print $1}"'
-        stdout, stderr, code = self.run_ansible_command(ansible_cmd, timeout=5, become=True, become_user='github-runner')
+        stdout, stderr, code = self.run_ansible_command(ansible_cmd, timeout=5, become=True, become_user='github-runner', host=host)
         runner_services = [line.strip() for line in self.clean_ansible_output(stdout).split('\n') if line.strip()]
         runners = []
         for service in runner_services:
-            # Get Description and ActiveState
+            # Get Description and ActiveState - target specific host
             show_cmd = f'systemctl show {service} --property=Description,ActiveState'
-            show_out, show_err, show_code = self.run_ansible_command(show_cmd, timeout=5, become=True, become_user='github-runner')
+            show_out, show_err, show_code = self.run_ansible_command(show_cmd, timeout=5, become=True, become_user='github-runner', host=host)
             desc = ''
             state = ''
             repo = ''
@@ -198,7 +213,7 @@ class RunnerManager:
                     # Only take the first valid ActiveState line
                     state_val = line.split('=',1)[1].strip()
                     # Only accept simple values (active, inactive, etc.)
-                    if state_val in ['active', 'inactive', 'activating', 'deactivating', 'failed', 'reloading', 'maintenance']: 
+                    if state_val in ['active', 'inactive', 'activating', 'deactivating', 'failed', 'reloading', 'maintenance']:
                         state = state_val
                     else:
                         # If the value is weird (concatenated error), default to 'unknown'
@@ -215,7 +230,7 @@ class RunnerManager:
     def start_runner(self, host, service_name):
         """Start a runner service"""
         try:
-            stdout, stderr, code = self.run_ansible_command(f'systemctl start {service_name}')
+            stdout, stderr, code = self.run_ansible_command(f'systemctl start {service_name}', host=host)
             return code == 0, stdout, stderr
         except Exception as e:
             return False, "", str(e)
@@ -223,7 +238,7 @@ class RunnerManager:
     def stop_runner(self, host, service_name):
         """Stop a runner service"""
         try:
-            stdout, stderr, code = self.run_ansible_command(f'systemctl stop {service_name}')
+            stdout, stderr, code = self.run_ansible_command(f'systemctl stop {service_name}', host=host)
             return code == 0, stdout, stderr
         except Exception as e:
             return False, "", str(e)
@@ -231,7 +246,7 @@ class RunnerManager:
     def restart_automation(self, host):
         """Restart the automation timer"""
         try:
-            stdout, stderr, code = self.run_ansible_command('systemctl restart github-runner-auto-register.timer')
+            stdout, stderr, code = self.run_ansible_command('systemctl restart github-runner-auto-register.timer', host=host)
             return code == 0, stdout, stderr
         except Exception as e:
             return False, "", str(e)
@@ -239,7 +254,7 @@ class RunnerManager:
     def trigger_scan(self, host):
         """Trigger a manual scan"""
         try:
-            stdout, stderr, code = self.run_ansible_command('/usr/local/bin/register-github-runners')
+            stdout, stderr, code = self.run_ansible_command('/usr/local/bin/register-github-runners', host=host)
             return code == 0, stdout, stderr
         except Exception as e:
             return False, "", str(e)
@@ -351,6 +366,8 @@ def config_page():
 
     # Load current servers from inventory
     servers = manager.load_servers()
+    # Update the manager's servers list
+    manager.servers = servers
 
     if request.method == 'POST':
         form_data = request.form.to_dict()
@@ -381,6 +398,7 @@ def config_page():
                             f.writelines(lines)
                         message = f"Server {new_name} added."
                         servers = manager.load_servers()
+                        manager.servers = servers
                     else:
                         message = "[runner-hosts] section not found in inventory."
                 except Exception as e:
@@ -398,9 +416,9 @@ def config_page():
                     for runner in runners:
                         manager.stop_runner(host, runner['service'])
                         # Optionally, disable or remove the service file if needed
-                        manager.run_ansible_command(f'systemctl disable {runner["service"]}', become=True, become_user='github-runner')
-                        manager.run_ansible_command(f'rm /etc/systemd/system/{runner["service"]}', become=True, become_user='root')
-                    manager.run_ansible_command('systemctl daemon-reload', become=True, become_user='root')
+                        manager.run_ansible_command(f'systemctl disable {runner["service"]}', become=True, become_user='github-runner', host=host)
+                        manager.run_ansible_command(f'rm /etc/systemd/system/{runner["service"]}', become=True, become_user='root', host=host)
+                    manager.run_ansible_command('systemctl daemon-reload', become=True, become_user='root', host=host)
                 # Remove from inventory
                 with open(INVENTORY_FILE, 'r') as f:
                     lines = f.readlines()
@@ -409,6 +427,7 @@ def config_page():
                     f.writelines(new_lines)
                 message = f"Server {remove_name} and its runners removed."
                 servers = manager.load_servers()
+                manager.servers = servers
             except Exception as e:
                 message = f"Error removing server: {e}"
         # Update vault variables
@@ -458,6 +477,7 @@ def config_page():
 def logs_page():
     """Logs page"""
     try:
+        # Get logs from all servers (this is intentionally targeting all servers)
         stdout, stderr, code = manager.run_ansible_command('tail -50 /var/log/github-runner-auto-register.log')
         logs = stdout if code == 0 else "No logs available"
     except:
