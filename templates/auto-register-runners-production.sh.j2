@@ -182,7 +182,8 @@ repository_needs_runner() {
                 
                 local content=$(echo "$workflow_content" | jq -r '.content' | base64 -d)
                 
-                if echo "$content" | grep -q "runs-on: self-hosted"; then
+                # Check for any runs-on value (ubuntu-latest, self-hosted, or any other runner)
+                if echo "$content" | grep -qE "runs-on:\s*(\[.*\]|.+)"; then
                     return 0  # Repository needs a runner
                 fi
             fi
