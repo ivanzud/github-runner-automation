@@ -4,6 +4,12 @@
   become: yes
   vars_files:
     - group_vars/runner-hosts/vault.yml
+    - group_vars/runner-hosts/vars.yml
+  vars:
+    runner_labels: "{{ vault_runner_labels | default('self-hosted,linux,x64') }}"
+    runner_name_prefix: "{{ vault_runner_name_prefix | default('runner') }}"
+    log_file: "/var/log/github-runner-auto-register.log"
+    max_parallel_jobs: 5
 
   tasks:
     - name: Create runner user
@@ -27,6 +33,22 @@
         - "/opt/scripts"
         - "/var/log"
 
+    - name: Ensure log file is writable by runner user
+      file:
+        path: "{{ log_file }}"
+        state: touch
+        owner: "{{ runner_user }}"
+        group: "{{ runner_user }}"
+        mode: "0644"
+
+    - name: Install logrotate config for runner logs
+      template:
+        src: templates/logrotate-github-runner-auto-register.conf.j2
+        dest: /etc/logrotate.d/github-runner-auto-register
+        mode: "0644"
+        owner: root
+        group: root
+
     - name: Install required packages
       apt:
         name:
@@ -36,12 +58,13 @@
           - python3
           - python3-pip
           - python3-venv
+          - logrotate
         state: present
         update_cache: yes
 
     - name: Template production runner registration script
       template:
-        src: scripts/auto-register-runners-production.sh
+        src: templates/auto-register-runners-production.sh.j2
         dest: "/opt/scripts/auto-register-runners.sh"
         mode: "0755"
         owner: root

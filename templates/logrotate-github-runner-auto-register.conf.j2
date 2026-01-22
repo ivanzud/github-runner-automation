@@ -1,0 +1,9 @@
+/var/log/github-runner-auto-register.log {
+    daily
+    rotate 14
+    compress
+    missingok
+    notifempty
+    copytruncate
+    create 0644 {{ runner_user }} {{ runner_user }}
+}

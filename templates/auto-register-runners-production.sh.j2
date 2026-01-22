@@ -35,6 +35,44 @@ error() {
     echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')] ERROR:${NC} $1" | tee -a "$LOG_FILE" >&2
 }
 
+# Build a runner name that conforms to GitHub limits and character rules.
+build_runner_name() {
+    local repo="$1"
+    local max_len=63
+    local prefix
+    local repo_slug
+    local host
+    local base
+    local len
+
+    prefix=$(echo "$RUNNER_NAME_PREFIX" | tr -cd '[:alnum:]-')
+    if [ -z "$prefix" ]; then
+        prefix="runner"
+    fi
+
+    repo_slug=$(echo "$repo" | tr '/.' '-' | tr -cd '[:alnum:]-')
+    host=$(hostname | tr -cd '[:alnum:]-')
+
+    base="${prefix}-${repo_slug}-${host}"
+    len=$(printf '%s' "$base" | wc -c | tr -d ' ')
+    if [ "$len" -le "$max_len" ]; then
+        printf '%s' "$base"
+        return 0
+    fi
+
+    local repo_hash
+    repo_hash=$(echo "$repo" | md5sum | cut -c1-8)
+    base="${prefix}-${repo_hash}-${host}"
+    len=$(printf '%s' "$base" | wc -c | tr -d ' ')
+    if [ "$len" -le "$max_len" ]; then
+        printf '%s' "$base"
+        return 0
+    fi
+
+    base="${prefix}-${repo_hash}"
+    printf '%s' "$base" | cut -c1-"$max_len"
+}
+
 # Check if required tools are installed
 check_dependencies() {
     log "Checking dependencies..."
@@ -67,16 +105,24 @@ check_github_token() {
     fi
     
     # Test the token by making a request to GitHub API
-    local response=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+    {% raw %}
+    local http_code=$(curl -s -o /tmp/github_response.json -w "%{http_code}" -H "Authorization: token $GITHUB_TOKEN" \
         -H "Accept: application/vnd.github.v3+json" \
         "https://api.github.com/user")
+    {% endraw %}
     
-    if echo "$response" | jq -e '.login' > /dev/null 2>&1; then
-        local username=$(echo "$response" | jq -r '.login')
+    local body=$(cat /tmp/github_response.json 2>/dev/null || echo "")
+    rm -f /tmp/github_response.json
+    
+    if [ "$http_code" = "200" ] && echo "$body" | jq -e '.login' > /dev/null 2>&1; then
+        local username=$(echo "$body" | jq -r '.login')
         log "GitHub token is valid. Authenticated as: $username"
         GITHUB_USERNAME="$username"
     else
-        error "Invalid GitHub token. Please check your token."
+        error "Invalid GitHub token. HTTP Code: $http_code"
+        if [ -n "$body" ]; then
+            error "API Response: $body"
+        fi
         exit 1
     fi
 }
@@ -111,7 +157,9 @@ get_repositories_needing_runners() {
         page=$((page + 1))
     done
     
+    {% raw %}
     log "Found ${#all_repos[@]} total repositories, checking for self-hosted runners..."
+    {% endraw %}
     
     # Process repositories in parallel to check for self-hosted runners
     local temp_dir=$(mktemp -d)
@@ -120,7 +168,9 @@ get_repositories_needing_runners() {
     
     for repo in "${all_repos[@]}"; do
         # Limit parallel jobs
+        {% raw %}
         if [ ${#pids[@]} -ge $MAX_PARALLEL_JOBS ]; then
+        {% endraw %}
             # Wait for one job to complete
             for i in "${!pids[@]}"; do
                 if ! kill -0 "${pids[$i]}" 2>/dev/null; then
@@ -145,7 +195,9 @@ get_repositories_needing_runners() {
     
     # Wait for all remaining jobs
     for pid in "${pids[@]}"; do
-        wait "$pid"
+        if ! wait "$pid"; then
+            warn "Repository scan process $pid failed"
+        fi
     done
     
     # Collect results
@@ -169,8 +221,8 @@ repository_needs_runner() {
     local response=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
         -H "Accept: application/vnd.github.v3+json" \
         "https://api.github.com/repos/$repo/contents/.github/workflows")
-    
-    if echo "$response" | jq -e '.[]' > /dev/null 2>&1; then
+    local response_type=$(echo "$response" | jq -r 'type' 2>/dev/null || echo "unknown")
+    if [ "$response_type" = "array" ]; then
         # Check each workflow file for self-hosted runner usage
         local workflows=$(echo "$response" | jq -r '.[] | select(.name | endswith(".yml")) | .name')
         
@@ -179,8 +231,12 @@ repository_needs_runner() {
                 local workflow_content=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
                     -H "Accept: application/vnd.github.v3+json" \
                     "https://api.github.com/repos/$repo/contents/.github/workflows/$workflow")
-                
-                local content=$(echo "$workflow_content" | jq -r '.content' | base64 -d)
+                local content=$(echo "$workflow_content" | jq -r '.content // empty' 2>/dev/null | base64 -d)
+                if [ -z "$content" ]; then
+                    local message=$(echo "$workflow_content" | jq -r '.message // empty' 2>/dev/null)
+                    warn "Skipping workflow '$workflow' for $repo (missing content). ${message:+API message: $message}"
+                    continue
+                fi
                 
                 # Check for any runs-on value (ubuntu-latest, self-hosted, or any other runner)
                 if echo "$content" | grep -qE "runs-on:\s*(\[.*\]|.+)"; then
@@ -188,6 +244,9 @@ repository_needs_runner() {
                 fi
             fi
         done <<< "$workflows"
+    else
+        local message=$(echo "$response" | jq -r '.message // empty' 2>/dev/null)
+        warn "Skipping workflows for $repo (unexpected response type: $response_type). ${message:+API message: $message}"
     fi
     
     return 1  # Repository doesn't need a runner
@@ -244,15 +303,17 @@ register_runner() {
     fi
     
     # Get registration token
-    local token_response=$(curl -s -X POST \
+    local token_response=$(curl -s -o /tmp/runner_token.json -w "%{http_code}" -X POST \
         -H "Authorization: token $GITHUB_TOKEN" \
         -H "Accept: application/vnd.github.v3+json" \
         "https://api.github.com/repos/$repo/actions/runners/registration-token")
-    
-    local registration_token=$(echo "$token_response" | jq -r '.token')
+    local http_code="$token_response"
+    local registration_token=$(jq -r '.token // empty' /tmp/runner_token.json 2>/dev/null)
+    local token_message=$(jq -r '.message // empty' /tmp/runner_token.json 2>/dev/null)
+    rm -f /tmp/runner_token.json
     
     if [ "$registration_token" = "null" ] || [ -z "$registration_token" ]; then
-        error "Failed to get registration token for $repo"
+        error "Failed to get registration token for $repo (HTTP $http_code). ${token_message:+API message: $token_message}"
         return 1
     fi
     
@@ -310,7 +371,8 @@ EOF
 # Process a single repository (for parallel execution)
 process_repository() {
     local repo="$1"
-    local runner_name="${RUNNER_NAME_PREFIX}-$(echo "$repo" | tr '/' '-')-$(hostname)"
+    local runner_name
+    runner_name=$(build_runner_name "$repo")
     
     if runner_exists "$repo" "$runner_name"; then
         log "Runner '$runner_name' already exists for repository '$repo'"
@@ -343,18 +405,24 @@ main() {
     # Get repositories that need runners
     local repos=($(get_repositories_needing_runners))
     
+    {% raw %}
     if [ ${#repos[@]} -eq 0 ]; then
+    {% endraw %}
         log "No repositories found that need runners."
         return 0
     fi
     
+    {% raw %}
     log "Found ${#repos[@]} repositories that need runners: ${repos[*]}"
+    {% endraw %}
     
     # Process repositories in parallel
     local pids=()
     for repo in "${repos[@]}"; do
         # Limit parallel jobs
+        {% raw %}
         if [ ${#pids[@]} -ge $MAX_PARALLEL_JOBS ]; then
+        {% endraw %}
             # Wait for one job to complete
             for i in "${!pids[@]}"; do
                 if ! kill -0 "${pids[$i]}" 2>/dev/null; then
@@ -372,9 +440,16 @@ main() {
     done
     
     # Wait for all remaining jobs
+    local failures=0
     for pid in "${pids[@]}"; do
-        wait "$pid"
+        if ! wait "$pid"; then
+            failures=$((failures + 1))
+        fi
     done
+
+    if [ "$failures" -gt 0 ]; then
+        warn "Completed with $failures failed runner registrations"
+    fi
     
     log "Automated runner registration completed (production version)."
 }

@@ -56,7 +56,9 @@
 - Ansible installed on your management machine
 - Python 3 (for the web UI)
 - SSH access to your runner servers (root or sudo)
-- GitHub Personal Access Token with `repo` and `admin:org` permissions
+- GitHub Personal Access Token
+  - Classic PAT: `repo` (and `admin:org` if you manage org repos)
+  - Fine-grained PAT: repository access + Actions/Administration read-write
 
 ### 1. Clone the Repository
 
@@ -86,14 +88,25 @@ cd github-runner-automation
   ```yaml
   github_token: "ghp_your_github_token_here"
   github_username: "your-github-username"
-  scan_interval_minutes: 5
+  scan_interval_minutes: 15
   ```
+
+Optional settings you can add to the same file:
+
+```yaml
+vault_runner_labels: "self-hosted,linux,x64"
+vault_runner_name_prefix: "runner"
+vault_runner_work_dir: "/home/github-runner/actions-runner"
+vault_runner_user: "github-runner"
+```
 
 ### 3. Deploy Everything
 
 ```bash
 ./install.sh
 ```
+
+This runs the production playbook (`deploy-production.yml`) and installs a systemd timer.
 
 ### 4. Start the Web Management Interface
 
@@ -118,7 +131,13 @@ Open your browser to: [http://localhost:8080](http://localhost:8080)
 
 ## Useful Commands
 
-Check automation status:
+Check automation status (recommended):
+
+```bash
+./scripts/check-status.sh
+```
+
+Check automation status (manual):
 
 ```bash
 ansible -i inventory/hosts runner-hosts -m shell -a "systemctl status github-runner-auto-register.timer"
@@ -135,6 +154,9 @@ Trigger manual scan:
 ```bash
 ansible -i inventory/hosts runner-hosts -m shell -a "/usr/local/bin/register-github-runners"
 ```
+
+Note: `github-runner-auto-register.service` is a oneshot service. It will show
+as `inactive` between runs; the timer controls scheduling.
 
 ---
 
@@ -163,6 +185,7 @@ github-runner-automation/
 - **Runners not registering?**
   - Check your GitHub token permissions
   - View logs in `/var/log/github-runner-auto-register.log`
+  - The log is rotated daily (keeps 14 days)
 
 ---
 
