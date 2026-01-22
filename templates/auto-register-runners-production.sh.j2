@@ -14,6 +14,7 @@ RUNNER_WORK_DIR="{{ runner_work_dir }}"
 RUNNER_USER="{{ runner_user }}"
 LOG_FILE="{{ log_file }}"
 MAX_PARALLEL_JOBS={{ max_parallel_jobs }}
+RUNNER_CLEANUP_DAYS={{ runner_cleanup_days }}
 
 # Colors for output
 RED='\033[0;31m'
@@ -35,6 +36,27 @@ error() {
     echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')] ERROR:${NC} $1" | tee -a "$LOG_FILE" >&2
 }
 
+# Remove old job workspaces to control disk usage.
+cleanup_old_workspaces() {
+    if ! echo "$RUNNER_CLEANUP_DAYS" | grep -Eq '^[0-9]+$'; then
+        warn "RUNNER_CLEANUP_DAYS is not a valid number: '$RUNNER_CLEANUP_DAYS' (skipping cleanup)"
+        return 0
+    fi
+
+    if [ "$RUNNER_CLEANUP_DAYS" -le 0 ]; then
+        log "Workspace cleanup disabled (RUNNER_CLEANUP_DAYS=$RUNNER_CLEANUP_DAYS)"
+        return 0
+    fi
+
+    log "Cleaning runner workspaces older than ${RUNNER_CLEANUP_DAYS} days..."
+
+    find "$RUNNER_WORK_DIR" -type d -name _work -print0 2>/dev/null | while IFS= read -r -d '' work_dir; do
+        find "$work_dir" -mindepth 1 -maxdepth 1 -mtime +"$RUNNER_CLEANUP_DAYS" -print0 2>/dev/null \
+            | while IFS= read -r -d '' path; do
+                rm -rf "$path"
+            done
+    done
+}
 # Build a runner name that conforms to GitHub limits and character rules.
 build_runner_name() {
     local repo="$1"
@@ -452,6 +474,8 @@ main() {
     fi
     
     log "Automated runner registration completed (production version)."
+
+    cleanup_old_workspaces
 }
 
 # Run main function

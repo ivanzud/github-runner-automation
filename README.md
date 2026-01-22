@@ -98,6 +98,7 @@ vault_runner_labels: "self-hosted,linux,x64"
 vault_runner_name_prefix: "runner"
 vault_runner_work_dir: "/home/github-runner/actions-runner"
 vault_runner_user: "github-runner"
+vault_runner_cleanup_days: 7
 ```
 
 ### 3. Deploy Everything
@@ -157,6 +158,9 @@ ansible -i inventory/hosts runner-hosts -m shell -a "/usr/local/bin/register-git
 
 Note: `github-runner-auto-register.service` is a oneshot service. It will show
 as `inactive` between runs; the timer controls scheduling.
+
+Workspace cleanup: the production script removes `_work` directories older than
+`vault_runner_cleanup_days` to control disk usage. Set it to `0` to disable.
 
 ---
 

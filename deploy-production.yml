@@ -8,6 +8,7 @@
   vars:
     runner_labels: "{{ vault_runner_labels | default('self-hosted,linux,x64') }}"
     runner_name_prefix: "{{ vault_runner_name_prefix | default('runner') }}"
+    runner_cleanup_days: "{{ vault_runner_cleanup_days | default(7) }}"
     log_file: "/var/log/github-runner-auto-register.log"
     max_parallel_jobs: 5
 
