@@ -1,0 +1,16 @@
+---
+- name: Check GitHub Actions runners (API)
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - group_vars/runner-hosts/vault.yml
+
+  tasks:
+    - name: Run runner health check
+      command: scripts/runner-health.sh
+      register: health
+      changed_when: false
+
+    - name: Display runner health summary
+      debug:
+        msg: "{{ health.stdout_lines }}"
